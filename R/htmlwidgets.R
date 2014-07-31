@@ -1,6 +1,6 @@
 #' @export
 print.htmlwidget <- function(x, ...) {
-  print(htmltools::as.tags(x))
+  print(browsable(htmltools::div(id="htmlwidget_container", htmltools::as.tags(x))))
 }
 
 #' @export

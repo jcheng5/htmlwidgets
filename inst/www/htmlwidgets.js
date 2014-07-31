@@ -3,10 +3,13 @@
   // new object. This allows preceding code to set options that affect the
   // initialization process (though none currently exist).
   window.HTMLWidgets = window.HTMLWidgets || {};
-
+  
+  // See if we're running in a viewer pane. If not, we're in a web browser.
+  var viewerMode = window.HTMLWidgets.viewerMode =
+      /\bviewer_pane=1\b/.test(window.location);
   // See if we're running in Shiny mode. If not, it's a static document.
-  var shinyMode = typeof(window.Shiny) !== "undefined" &&
-      !!window.Shiny.outputBindings;
+  var shinyMode = window.HTMLWidgets.shinyMode =
+      typeof(window.Shiny) !== "undefined" && !!window.Shiny.outputBindings;
 
   // We can't count on jQuery being available, so we implement our own
   // version if necessary.
@@ -48,11 +51,66 @@
     }
   }
   
+  function shouldFill(binding) {
+    var cel = document.getElementById("htmlwidget_container");
+    if (!cel)
+      return false;
+
+    if (binding.sizing.fillViewer === true && viewerMode)
+      return true;
+    if (binding.sizing.fillBrowser === true && !viewerMode)
+      return true;
+    return false;
+  }
+  
+  function initSizing(el, binding) {
+    var cel = document.getElementById("htmlwidget_container");
+
+    if (!cel)
+      return; // We're not in a print()-like context, nothing to do
+    
+    if (typeof(binding.sizing.padding) !== "undefined") {
+      document.body.style.padding = binding.sizing.padding + "px";
+    }
+    
+    if (shouldFill(binding)) {
+      document.body.style.overflow = "hidden";
+      document.body.style.width = "100%";
+      document.body.style.height = "100%";
+      document.documentElement.style.width = "100%";
+      document.documentElement.style.height = "100%";
+      if (cel) {
+        cel.style.position = "absolute";
+        cel.style.top = cel.style.right = cel.style.bottom = cel.style.left =
+          binding.sizing.padding + "px";
+      }
+    }
+    
+    return {
+      getWidth: function() {
+        return cel.offsetWidth;
+      },
+      getHeight: function() {
+        return cel.offsetHeight;
+      }
+    }
+  }
+  
+  function onResize(el, binding) {
+    if (binding.resize && shouldFill(binding)) {
+      var cel = document.getElementById("htmlwidget_container");
+      binding.resize(el, cel.offsetWidth, cel.offsetHeight);
+    } else {
+      binding.resize(el);
+    }
+  }
+  
   // Default implementations for methods
   var defaults = {
     find: function(scope) {
       return querySelectorAll(scope, "." + this.name);
-    }
+    },
+    sizing: {}
   };
   
   // Called by widget bindings to register a new type of widget. The definition
@@ -108,6 +166,8 @@
         definition._htmlwidgets_renderValue = definition.renderValue;
         definition.renderValue = function(el, data) {
           if (!elementData(el, "initialized")) {
+            initSizing(el, definition);
+
             elementData(el, "initialized", true);
             var result = this._htmlwidgets_initialize(el);
             elementData(el, "init_result", result);
@@ -132,8 +192,16 @@
         var matches = widget.find(document.documentElement);
         for (var j = 0; j < matches.length; j++) {
           var el = matches[j];
+          var sizeObj = initSizing(el, widget);
           // TODO: Check if el is already bound
-          var initResult = widget.initialize ? widget.initialize(el) : null;
+          var initResult = widget.initialize ? widget.initialize(el, sizeObj.getWidth(), sizeObj.getHeight()) : null;
+          
+          if (sizeObj && widget.resize) {
+            // TODO: Don't depend on jQuery
+            $(window).on("resize", function(e) {
+              widget.resize(el, sizeObj.getWidth(), sizeObj.getHeight(), initResult);
+            });
+          }
           
           var scriptData = document.querySelector("script[data-for='" + el.id + "']");
           if (scriptData) {
