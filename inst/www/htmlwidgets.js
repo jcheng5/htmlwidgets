@@ -83,6 +83,8 @@
         cel.style.position = "absolute";
         cel.style.top = cel.style.right = cel.style.bottom = cel.style.left =
           binding.sizing.padding + "px";
+        el.style.width = "100%";
+        el.style.height = "100%";
       }
     }
     
@@ -194,13 +196,17 @@
           var el = matches[j];
           var sizeObj = initSizing(el, widget);
           // TODO: Check if el is already bound
-          var initResult = widget.initialize ? widget.initialize(el, sizeObj.getWidth(), sizeObj.getHeight()) : null;
+          var initResult;
+          if (widget.initialize) {
+            widget.initialize(el, sizeObj ? sizeObj.getWidth() : null,
+              sizeObj ? sizeObj.getHeight() : null);
+          }
           
           if (sizeObj && widget.resize) {
-            // TODO: Don't depend on jQuery
-            $(window).on("resize", function(e) {
+            // TODO: Use real event listener
+            window.onresize = function(e) {
               widget.resize(el, sizeObj.getWidth(), sizeObj.getHeight(), initResult);
-            });
+            };
           }
           
           var scriptData = document.querySelector("script[data-for='" + el.id + "']");

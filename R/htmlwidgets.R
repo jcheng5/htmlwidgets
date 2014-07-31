@@ -31,7 +31,10 @@ toHTML.htmlwidget <- function(x, defaultWidth, defaultHeight){
   height <- if (is.null(x$height)) defaultHeight else x$height
   
   # create a style attribute for the width and height
-  style <- paste("width:", width, "px;height:", height, "px;", sep = "")
+  style <- paste(
+    "width:", validateCssUnit(width), ";",
+    "height:", validateCssUnit(height), ";",
+    sep = "")
   
   x$id = id
   
@@ -90,9 +93,9 @@ widget_dependencies <- function(x){
 #' @export
 widget_dependencies.htmlwidget <- function(x){
   lib = class(x)[1]
-  jsfile = attr(x, "jsfile") %||% sprintf('%s.js', lib)
-  config = attr(x, "config") %||% sprintf('%s.yaml', lib)
-  package = attr(x, "package") %||% lib
+  jsfile = attr(x, "jsfile", exact = TRUE) %||% sprintf('%s.js', lib)
+  config = attr(x, "config", exact = TRUE) %||% sprintf('%s.yaml', lib)
+  package = attr(x, "package", exact = TRUE) %||% lib
   widgetDep <- getDependency(config, package)
   
   # TODO: The binding JS file should really be in its own directory to prevent
@@ -110,6 +113,20 @@ widget_dependencies.htmlwidget <- function(x){
     widgetDep,
     list(bindingDep)
   )
+}
+
+#' @export
+respect_fig_width <- function(x, value = TRUE) {
+  attr(x, "respect_fig_width") <- value
+}
+
+#' @export
+should_respect_fig_width <- function(x, default = TRUE) {
+  value <- attr(x, "respect_fig_width", exact = TRUE)
+  if (is.null(value))
+    return(default)
+  else
+    return(value)
 }
 
 # Generates a <script type="application/json"> tag with the JSON-encoded data,
