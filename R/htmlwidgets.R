@@ -1,22 +1,13 @@
 #' @export
 print.htmlwidget <- function(x, ...) {
-  print(browsable(htmltools::div(id="htmlwidget_container", htmltools::as.tags(x))))
+  print(browsable(htmltools::as.tags(x, standalone=TRUE)))
 }
 
 #' @export
-as.tags.htmlwidget <- function(x) {
-  toHTML(x, 450, 350)
+as.tags.htmlwidget <- function(x, standalone = FALSE) {
+  toHTML(x, standalone = standalone)
 }
 
-
-#' @export
-knit_print.htmlwidget <- function(x, ..., options) {
-  knit_print(
-    toHTML(x, options$out.width.px, options$out.height.px),
-    options = options, 
-    ...
-  )
-}
 
 #' @export
 toHTML <- function(x, ...){
@@ -24,23 +15,43 @@ toHTML <- function(x, ...){
 }
 
 #' @export
-toHTML.htmlwidget <- function(x, defaultWidth, defaultHeight){
+toHTML.htmlwidget <- function(x, standalone = FALSE, knitrOptions = NULL, ...){
+  
+  sizeInfo <- resolveSizing(x, x$sizePolicy, standalone = standalone, knitrOptions = knitrOptions)
+  
   id <- paste("htmlwidget", as.integer(stats::runif(1, 1, 10000)), sep="-")
   
-  width <- if (is.null(x$width)) defaultWidth else x$width
-  height <- if (is.null(x$height)) defaultHeight else x$height
+  w <- validateCssUnit(sizeInfo$width)
+  h <- validateCssUnit(sizeInfo$height)
   
   # create a style attribute for the width and height
   style <- paste(
-    "width:", validateCssUnit(width), ";",
-    "height:", validateCssUnit(height), ";",
+    "width:", w, ";",
+    "height:", h, ";",
     sep = "")
   
-  x$id = id
+  x$id <- id
+  
+  container <- if (isTRUE(standalone)) {
+    function(x) {
+      div(id="htmlwidget_container", x)
+    }
+  } else {
+    identity
+  }
   
   html <- htmltools::tagList(
-    widget_html(x, id = id, style = style, class = class(x)[1]),
-    widget_data(x, id)
+    container(
+      widget_html(x, id = id, style = style, class = class(x)[1],
+        width = sizeInfo$width, height = sizeInfo$height
+      )
+    ),
+    widget_data(x, id),
+    if (!is.null(sizeInfo$runtime)) {
+      tags$script(type="application/htmlwidget-sizing", `data-for` = id,
+        toJSON(sizeInfo$runtime, collapse="")
+      )
+    }
   )
   
   html <- htmltools::attachDependencies(html, widget_dependencies(x))
@@ -75,12 +86,12 @@ renderWidget <- function(expr, env = parent.frame(), quoted = FALSE){
 
 
 #' @export
-widget_html <- function(x, id, style, class){
+widget_html <- function(x, id, style, class, width, height, ...){
   UseMethod('widget_html')
 }
 
 #' @export
-widget_html.htmlwidget <- function(x, id, style, class){
+widget_html.htmlwidget <- function(x, id, style, class, ...){
   tags$div(id = id, style = style, class = class)
 }
 
@@ -115,20 +126,6 @@ widget_dependencies.htmlwidget <- function(x){
   )
 }
 
-#' @export
-respect_fig_width <- function(x, value = TRUE) {
-  attr(x, "respect_fig_width") <- value
-}
-
-#' @export
-should_respect_fig_width <- function(x, default = TRUE) {
-  value <- attr(x, "respect_fig_width", exact = TRUE)
-  if (is.null(value))
-    return(default)
-  else
-    return(value)
-}
-
 # Generates a <script type="application/json"> tag with the JSON-encoded data,
 # to be picked up by htmlwidgets.js for static rendering.
 #' @export
@@ -139,6 +136,6 @@ widget_data <- function(x, id, ...){
 #' @export
 widget_data.htmlwidget <- function(x, id, ...){
   tags$script(type="application/json", `data-for` = id,
-    HTML(RJSONIO::toJSON(x))
+    HTML(toJSON(x, collapse = ""))
   )
 }
