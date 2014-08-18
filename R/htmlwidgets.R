@@ -51,7 +51,10 @@ toHTML.htmlwidget <- function(x, standalone = FALSE, knitrOptions = NULL, ...){
   
   sizeInfo <- resolveSizing(x, x$sizingPolicy, standalone = standalone, knitrOptions = knitrOptions)
   
-  id <- paste("htmlwidget", as.integer(stats::runif(1, 1, 10000)), sep="-")
+  id <- if (!is.null(x$id))
+    x$id
+  else
+    paste("htmlwidget", as.integer(stats::runif(1, 1, 10000)), sep="-")
   
   w <- validateCssUnit(sizeInfo$width)
   h <- validateCssUnit(sizeInfo$height)
@@ -119,18 +122,23 @@ widget_data <- function(x, id, ...){
   )
 }
 
+# @param id An optional ID that will be assigned to the widget element to make
+#   it easier for user-provided JavaScript code to manipulate specific
+#   instances of widgets.
 #' @export
 createWidget <- function(name, 
                          x,
                          width = NULL,
                          height = NULL,
                          sizingPolicy = htmlwidgets::sizingPolicy(), 
-                         package = name) {  
+                         package = name,
+                         id = NULL) {
   structure(
     list(x = x,
          width = width,
          height = height,
-         sizingPolicy = sizingPolicy), 
+         sizingPolicy = sizingPolicy,
+         id = id)
     class = c(name, 
               if (sizingPolicy$viewer$suppress) "suppress_viewer", 
               "htmlwidget"),
